@@ -1,0 +1,80 @@
+version: '2.1'
+services:
+    # Zookeeper instance for storing configuration and Spark Cluster""
+    zookeeper1:
+        build:
+            dockerfile: Dockerfile
+            context: ./zookeeper
+            args:
+                myid: 1
+        image: hub.cdnai.net/jarvis/zookeeper1:${IMAGE_TAG:-latest}
+        networks:
+            - SPARK-CLUSTER
+    # Zookeeper instance for storing configuration and Spark Cluster
+    zookeeper2:
+        build:
+            dockerfile: Dockerfile
+            context: ./zookeeper
+            args:
+                myid: 2
+        image: hub.cdnai.net/jarvis/zookeeper2:${IMAGE_TAG:-latest}
+        networks:
+            - SPARK-CLUSTER
+    
+              
+    spark-master1:
+        build: ./spark
+        image: hub.cdnai.net/jarvis/spark:${IMAGE_TAG:-latest}
+        ports:
+            - 8100:8100
+        command: spark-docker.sh master
+        environment:
+            - SPARK_MASTER_HOST=spark-master1
+            - SPARK_MASTER_PORT=7077
+            - SPARK_MASTER_WEBUI_PORT=8100
+        depends_on:
+            - zookeeper1
+            - zookeeper2
+        networks:
+            - SPARK-CLUSTER
+        volumes:
+            - ./:/home
+
+    spark-master2:
+        build: ./spark
+        image: hub.cdnai.net/jarvis/spark:${IMAGE_TAG:-latest}
+        ports:
+            - 8200:8200
+        command: spark-docker.sh master
+        environment:
+            - SPARK_MASTER_HOST=spark-master2
+            - SPARK_MASTER_PORT=7077
+            - SPARK_MASTER_WEBUI_PORT=8200
+        depends_on:
+            - zookeeper1
+            - zookeeper2
+        networks:
+            - SPARK-CLUSTER
+        volumes:
+            - ./:/home
+
+    spark-worker:
+        build: ./spark
+        image: hub.cdnai.net/jarvis/spark:${IMAGE_TAG:-latest}
+        command: spark-docker.sh worker spark://spark-master1:7077,spark-master2:7077
+        depends_on:
+            - spark-master1
+            - spark-master2
+        networks:
+            - SPARK-CLUSTER
+
+    cassandra:
+        image: cassandra:3
+        environment:
+          - MAX_HEAP_SIZE=400M
+          - HEAP_NEWSIZE=100M
+        networks:
+            - SPARK-CLUSTER
+networks:
+    SPARK-CLUSTER:
+        driver: bridge
